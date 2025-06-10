@@ -1,4 +1,5 @@
 # Copyright 2024 Tecnativa - Carlos López
+# Copyright NuoBiT Solutions - Frank Cespedes <fcespedes@nuobit.com>
 # License AGPL-3.0 or later (https://www.gnu.org/licenses/agpl).
 import re
 
@@ -21,6 +22,10 @@ class MailWhatsAppTemplate(models.Model):
 
     name = fields.Char(required=True)
     body = fields.Text(required=True)
+    variable_ids = fields.One2many(
+        comodel_name="mail.whatsapp.template.variable", inverse_name="template_id"
+    )
+    variable_type = fields.Selection(selection=[("number", "Number"), ("name", "Name")])
     header = fields.Char()
     footer = fields.Char()
     template_name = fields.Char(
@@ -81,6 +86,25 @@ class MailWhatsAppTemplate(models.Model):
                 template.template_name = re.sub(
                     r"\W+", "_", slugify(template.name or "")
                 )
+
+    def get_variable_values(self):
+        values = {"type": self.variable_type}
+        body_variables = self.variable_ids.filtered(lambda x: x.section == "body")
+        if body_variables:
+            body = {}
+            for variable in body_variables:
+                body.update({variable.name: variable.default_value})
+            values.update({"body": body})
+        return values
+
+    def get_body(self):
+        values = self.get_variable_values()
+        body_variables = values.get("body")
+        body = self.body
+        if body_variables:
+            for key, value in body_variables.items():
+                body = body.replace(f"{{{{{key}}}}}", value)
+        return body
 
     def button_back2draft(self):
         self.write({"state": "draft"})
@@ -159,6 +183,7 @@ class MailWhatsAppTemplate(models.Model):
             )
             response.raise_for_status()
             json_data = response.json()
+            self.variable_ids.unlink()
             vals = self._prepare_values_to_import(gateway, json_data)
             self.write(vals)
         except Exception as err:
@@ -185,6 +210,23 @@ class MailWhatsAppTemplate(models.Model):
                 vals["header"] = component["text"]
             elif component["type"] == "BODY":
                 vals["body"] = component["text"]
+                for key, value in component.get("example", {}).items():
+                    if key == "body_text":
+                        vals["variable_type"] = "number"
+                        for var_list in value:
+                            for variable, var_value in enumerate(var_list, start=1):
+                                vals.setdefault("variable_ids", []).append(
+                                    (
+                                        0,
+                                        0,
+                                        {
+                                            "section": "body",
+                                            "name": variable,
+                                            "parameter_type": "text",
+                                            "default_value": var_value,
+                                        },
+                                    )
+                                )
             elif component["type"] == "FOOTER":
                 vals["footer"] = component["text"]
             else:

@@ -297,15 +297,34 @@ class MailGatewayWhatsappService(models.AbstractModel):
                 "to": channel.gateway_channel_token,
             }
             if whatsapp_template:
+                variables = whatsapp_template.get_variable_values()
                 payload.update(
                     {
                         "type": "template",
                         "template": {
                             "name": whatsapp_template.template_name,
                             "language": {"code": whatsapp_template.language},
+                            "components": [],
                         },
                     }
                 )
+                body_variables = variables.get("body")
+                if body_variables:
+                    parameters = []
+                    if variables["type"] == "number":
+                        for value in body_variables.values():
+                            parameters.append(
+                                {
+                                    "type": "text",
+                                    "text": value,
+                                }
+                            )
+                    elif variables["type"] == "name":
+                        # TODO: Implement name type
+                        pass
+                    payload["template"]["components"].append(
+                        {"type": "body", "parameters": parameters}
+                    )
             else:
                 payload.update(
                     {

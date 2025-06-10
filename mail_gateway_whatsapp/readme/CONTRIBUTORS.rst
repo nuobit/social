@@ -3,3 +3,4 @@
 * `Tecnativa <https://www.tecnativa.com>`_:
 
     * Carlos Lopez
+* Frank Cespedes <fcespedes@nuobit.es>
